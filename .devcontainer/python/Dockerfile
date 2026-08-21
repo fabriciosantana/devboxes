@@ -1,80 +1,30 @@
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
-# Avoid interactive prompts during image build
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install only essentials required before Conda is available
-RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        ca-certificates \
-        curl \
-        git \
-        libffi-dev \
-        libssl-dev \
-        pkg-config \
-        unzip \
-        zstd \
-        wget \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Miniconda and set up the base paths
 ARG MINICONDA_VERSION=py313_25.9.1-3
-ARG MINICONDA_INSTALLER=Miniconda3-${MINICONDA_VERSION}-Linux-x86_64.sh
+ARG TARGETARCH
+
 ENV CONDA_DIR=/opt/conda
-RUN curl -fsSL https://repo.anaconda.com/miniconda/${MINICONDA_INSTALLER} -o /tmp/miniconda.sh \
-    && bash /tmp/miniconda.sh -b -p ${CONDA_DIR} \
+
+# Install Conda and create only the environment needed for Python notebooks.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && case "${TARGETARCH}" in \
+        amd64) conda_arch=x86_64 ;; \
+        arm64) conda_arch=aarch64 ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL \
+        "https://repo.anaconda.com/miniconda/Miniconda3-${MINICONDA_VERSION}-Linux-${conda_arch}.sh" \
+        -o /tmp/miniconda.sh \
+    && bash /tmp/miniconda.sh -b -p "${CONDA_DIR}" \
     && rm /tmp/miniconda.sh \
-    && ${CONDA_DIR}/bin/conda clean -afy
-
-# Copy dependency specifications
-COPY environment.yml /tmp/environment.yml
-COPY requirements.txt /tmp/pip-requirements.txt
-
-RUN ${CONDA_DIR}/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-RUN ${CONDA_DIR}/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-
-# Create the mcdia environment with the required Python version and install dependencies
-ARG PYTHON_VERSION=3.13
-RUN ${CONDA_DIR}/bin/conda update -y -n base -c conda-forge conda \
-    && sed -i "s/PYTHON_VERSION_PLACEHOLDER/${PYTHON_VERSION}/" /tmp/environment.yml \
-    && ${CONDA_DIR}/bin/conda env create -f /tmp/environment.yml \
-    && rm /tmp/environment.yml /tmp/pip-requirements.txt \
-    && ${CONDA_DIR}/bin/conda clean -afy
-
-RUN apt-get update && \
-    apt-get install -y git-lfs && \
-    git lfs install --system && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Docker Engine from Docker's official APT repository.
-RUN install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
-    && chmod a+r /etc/apt/keyrings/docker.asc \
-    && . /etc/os-release \
-    && printf '%s\n' \
-        'Types: deb' \
-        'URIs: https://download.docker.com/linux/ubuntu' \
-        "Suites: ${UBUNTU_CODENAME:-$VERSION_CODENAME}" \
-        'Components: stable' \
-        "Architectures: $(dpkg --print-architecture)" \
-        'Signed-By: /etc/apt/keyrings/docker.asc' \
-        > /etc/apt/sources.list.d/docker.sources \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-        containerd.io \
-        docker-buildx-plugin \
-        docker-ce \
-        docker-ce-cli \
-        docker-compose-plugin \
-    && if ! getent group docker >/dev/null; then groupadd docker; fi \
-    && usermod -aG docker vscode \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Ollama CLI/runtime (service can be started manually with `ollama serve`).
-RUN curl -fsSL https://ollama.com/install.sh | sh
+COPY environment.yml /tmp/environment.yml
 
-# Make the environment active by default
-ENV PATH=${CONDA_DIR}/envs/mcdia/bin:${CONDA_DIR}/bin:${PATH}
-ENV CONDA_DEFAULT_ENV=mcdia
+RUN "${CONDA_DIR}/bin/conda" env create -f /tmp/environment.yml \
+    && rm /tmp/environment.yml \
+    && "${CONDA_DIR}/bin/conda" clean -afy
+
+ENV PATH=${CONDA_DIR}/envs/python/bin:${CONDA_DIR}/bin:${PATH}
+ENV CONDA_DEFAULT_ENV=python

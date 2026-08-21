@@ -1,38 +1,10 @@
-name: mcdia
+name: python
 channels:
   - conda-forge
-  - pytorch
   - nodefaults
 dependencies:
   - python=3.13
   - pip
-  - numpy
-  - pandas
-  - scipy
-  - matplotlib
-  - seaborn
-  - scikit-learn
-  - statsmodels
-  - plotly
-  - joblib
-  - requests
-  - nltk
-  - spacy
-  - shap
-  - wordcloud
-  - xgboost
-  - pytorch
-  - torchvision
-  - torchaudio
+  - jupyterlab
   - ipykernel
   - ipywidgets
-  - notebook
-  - jupyterlab
-  - pytest
-  - black
-  - mypy
-  - nbqa
-  - ruff
-  - pre-commit
-  - pip:
-      - -r /tmp/pip-requirements.txt
